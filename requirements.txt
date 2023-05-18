@@ -1,5 +1,5 @@
-torch
-stlpy
-termcolor
-gurobipy
-scipy
+torch~=2.0.1
+stlpy~=0.3.0
+termcolor~=2.3.0
+gurobipy~=10.0.1
+scipy~=1.10.1
