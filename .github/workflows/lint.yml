@@ -1,0 +1,12 @@
+name: autoflake, isort, black
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Python Linter
+        uses: jiwidi/python-lint-action@v1
+
+      
