@@ -10,6 +10,6 @@ setup(
     author="Zikang Xiong",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    python_requires=">=3.9",
-    requires=REQUIRED_PACKAGES,
+    python_requires=">=3.8",
+    install_requires=REQUIRED_PACKAGES,
 )
