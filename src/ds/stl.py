@@ -1,19 +1,23 @@
+import io
 import time
 from abc import abstractmethod
 from collections import deque
+from contextlib import redirect_stdout
 from typing import TypeVar
 
 import gurobipy as gp
 import numpy as np
 import torch
 from gurobipy import GRB
-from stlpy.solvers.base import STLSolver
 from stlpy.STL import LinearPredicate, NonlinearPredicate, STLTree
 from stlpy.systems import LinearSystem
 from torch import Tensor
 from torch.nn.functional import softmax
 
 from ds.utils import default_tensor
+
+with redirect_stdout(io.StringIO()):
+    from stlpy.solvers.base import STLSolver
 
 COLORED = False
 IMPLIES_TRICK = False
