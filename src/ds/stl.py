@@ -3,7 +3,7 @@ import time
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
-from typing import TypeVar
+from typing import TypeVar, Tuple
 
 import gurobipy as gp
 import numpy as np
@@ -18,6 +18,8 @@ from ds.utils import default_tensor
 
 with redirect_stdout(io.StringIO()):
     from stlpy.solvers.base import STLSolver
+
+import logging
 
 COLORED = False
 IMPLIES_TRICK = False
@@ -312,7 +314,7 @@ class StlpySolver:
         energy_obj: bool = True,
         time_limit=20,
         threads=1,
-    ) -> tuple[np.ndarray, dict]:
+    ) -> Tuple[np.ndarray, dict]:
         """
         Solve the STL formula
         spec: stlpy formula
@@ -560,6 +562,7 @@ class STL:
         self.sequence_operators = ("G", "F", "U")
         self.stlpy_form = None
         self.expr_repr = None
+        self.logger = logging.getLogger(__name__)
 
     """
     Syntax Functions
@@ -606,7 +609,7 @@ class STL:
             # NOTE: this will allow access the elements after previous end_t
             end_t = start_t + ast[-1]
             if end_t > path.shape[1]:
-                print("Warning: end_t is larger than motion length")
+                self.logger.warning("end_t is larger than motion length")
 
             start_t = start_t + ast[-2]
 
