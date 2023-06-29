@@ -54,8 +54,8 @@ We can synthesize a trace with [gradient](examples/stl/differentiability.py) or 
 Probability temporal logic is an on-going work integrating probability and random variables into temporal logic. It is useful in robot planning and control, reinforcement learning, and formal verification. -->
 
 ## Citation
-If you find this repository useful in your research, considering cite:
-```
+If you find this repository useful in your research, considering to cite:
+```bibtex
 @misc{xiong2023diffspec,
       title={DiffSpec: A Differentiable Logic Specification Framework},
       url={https://github.com/ZikangXiong/diff-spec/},
