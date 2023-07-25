@@ -603,12 +603,11 @@ class STL:
             return ast.eval_at_t(path, start_t)
 
         if ast[0] in self.sequence_operators:
-            # NOTE: this will allow access the elements after previous end_t
-            end_t = start_t + ast[-1]
+            # NOTE: Overwrite start_t and end_t
+            # this will allow access the elements after previous end_t
+            start_t, end_t = start_t + ast[-2], start_t + ast[-1]
             if end_t > path.shape[1]:
-                print("Warning: end_t is larger than motion length")
-
-            start_t = start_t + ast[-2]
+                print("Warning: end_t is larger than length")
 
         if ast[0] == "&":
             res = self._eval_and(ast[1], ast[2], path, start_t, end_t)
@@ -695,7 +694,7 @@ class STL:
         # unroll always
         val_per_time = torch.stack(
             [
-                self._eval(sub_form, path, start_t=t, end_t=end_t)
+                self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
             dim=-1,
@@ -714,7 +713,7 @@ class STL:
         # unroll eventually
         val_per_time = torch.stack(
             [
-                self._eval(sub_form, path, start_t=t, end_t=end_t)
+                self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
             dim=-1,
