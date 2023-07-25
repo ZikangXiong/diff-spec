@@ -369,7 +369,7 @@ class PredicateBase:
         return self.name
 
 
-class RectReachPredicte(PredicateBase):
+class RectReachPredicate(PredicateBase):
     """
     Rectangle reachability predicate
     """

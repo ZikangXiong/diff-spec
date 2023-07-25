@@ -38,9 +38,9 @@ We can use STL to describe the behavior of a system. For example, we can use STL
 
 ```python
 # goal_1 is a rectangle area centered in [0, 0] with width and height 1
-goal_1 = STL(RectReachPredicte(np.array([0, 0]), np.array([1, 1]), "goal_1"))
+goal_1 = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal_1"))
 # goal_2 is a rectangle area centered in [2, 2] with width and height 1
-goal_2 = STL(RectReachPredicte(np.array([2, 2]), np.array([1, 1]), "goal_2"))
+goal_2 = STL(RectReachPredicate(np.array([2, 2]), np.array([1, 1]), "goal_2"))
 
 # form is the formula goal_1 eventually in 0 to 5 and goal_2 eventually in 0 to 5
 # and that always holds in 0 to 8

@@ -1,10 +1,10 @@
 import numpy as np
 
-from ds.stl import STL, RectAvoidPredicte, RectReachPredicte, StlpySolver
+from ds.stl import STL, RectAvoidPredicte, RectReachPredicate, StlpySolver
 
 
 def solve_reach_avoid():
-    goal = STL(RectReachPredicte(np.array([0, 0]), np.array([1, 1]), "goal"))
+    goal = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal"))
     obs = STL(RectAvoidPredicte(np.array([3, 2]), np.array([1, 1]), "obs"))
     form = goal.eventually(0, 10) & obs.always(0, 10)
 
