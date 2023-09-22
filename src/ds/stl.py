@@ -371,7 +371,7 @@ class PredicateBase:
         return self.name
 
 
-class RectReachPredicte(PredicateBase):
+class RectReachPredicate(PredicateBase):
     """
     Rectangle reachability predicate
     """
@@ -606,8 +606,9 @@ class STL:
             return ast.eval_at_t(path, start_t)
 
         if ast[0] in self.sequence_operators:
-            # NOTE: this will allow access the elements after previous end_t
-            end_t = start_t + ast[-1]
+            # NOTE: Overwrite start_t and end_t
+            # this will allow access the elements after previous end_t
+            start_t, end_t = start_t + ast[-2], start_t + ast[-1]
             if end_t > path.shape[1]:
                 self.logger.warning("end_t is larger than motion length")
 
@@ -698,7 +699,7 @@ class STL:
         # unroll always
         val_per_time = torch.stack(
             [
-                self._eval(sub_form, path, start_t=t, end_t=end_t)
+                self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
             dim=-1,
@@ -717,7 +718,7 @@ class STL:
         # unroll eventually
         val_per_time = torch.stack(
             [
-                self._eval(sub_form, path, start_t=t, end_t=end_t)
+                self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
             dim=-1,
