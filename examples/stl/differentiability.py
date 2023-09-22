@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.optim import Adam
 
-from ds.stl import STL, RectAvoidPredicte, RectReachPredicte
+from ds.stl import STL, RectAvoidPredicte, RectReachPredicate
 from ds.utils import default_tensor
 
 
@@ -15,7 +15,7 @@ def eval_reach_avoid():
 
     # Define the formula predicates
     # goal is a rectangle area centered in [0, 0] with width and height 1
-    goal = STL(RectReachPredicte(np.array([0, 0]), np.array([1, 1]), "goal"))
+    goal = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal"))
     # obs is a rectangle area centered in [3, 2] with width and height 1
     obs = STL(RectAvoidPredicte(np.array([3, 2]), np.array([1, 1]), "obs"))
     # form is the formula goal eventually in 0 to 10 and avoid obs always in 0 to 10
@@ -75,9 +75,9 @@ def backward():
 
     # Define the formula predicates
     # goal_1 is a rectangle area centered in [0, 0] with width and height 1
-    goal_1 = STL(RectReachPredicte(np.array([0, 0]), np.array([1, 1]), "goal_1"))
+    goal_1 = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal_1"))
     # goal_2 is a rectangle area centered in [2, 2] with width and height 1
-    goal_2 = STL(RectReachPredicte(np.array([2, 2]), np.array([1, 1]), "goal_2"))
+    goal_2 = STL(RectReachPredicate(np.array([2, 2]), np.array([1, 1]), "goal_2"))
 
     # form is the formula goal_1 eventually in 0 to 5 and goal_2 eventually in 0 to 5
     # and that holds always in 0 to 8
