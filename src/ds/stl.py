@@ -379,7 +379,7 @@ class RectReachPredicate(PredicateBase):
     def __init__(self, cent: np.ndarray, size: np.ndarray, name: str):
         """
         :param cent: center of the rectangle
-        :param bound: bound of the rectangle
+        :param size: bound of the rectangle
         :param name: name of the predicate
         """
         super().__init__(name)
@@ -415,7 +415,7 @@ class RectAvoidPredicte(PredicateBase):
     def __init__(self, cent: np.ndarray, size: np.ndarray, name: str):
         """
         :param cent: center of the rectangle
-        :param bound: bound of the rectangle
+        :param size: bound of the rectangle
         :param name: name of the predicate
         """
         super().__init__(name)
