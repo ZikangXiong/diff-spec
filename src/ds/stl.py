@@ -612,8 +612,6 @@ class STL:
             if end_t > path.shape[1]:
                 self.logger.warning("end_t is larger than motion length")
 
-            start_t = start_t + ast[-2]
-
         if ast[0] == "&":
             res = self._eval_and(ast[1], ast[2], path, start_t, end_t)
         elif ast[0] == "|":
