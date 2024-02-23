@@ -23,7 +23,7 @@ import logging
 
 COLORED = False
 IMPLIES_TRICK = False
-HARDNESS = 100.0
+HARDNESS = 10.0  # Reduce hardness of softmax to propagate gradients more easily
 
 
 if COLORED:
