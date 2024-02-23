@@ -9,7 +9,7 @@ setup(
     description="Differentiable Symbolic Specification",
     author="Zikang Xiong",
     package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    packages=find_packages(where="src", exclude=["tests*"]),
     python_requires=">=3.8",
     install_requires=REQUIRED_PACKAGES,
 )

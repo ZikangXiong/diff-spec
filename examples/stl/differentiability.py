@@ -1,11 +1,20 @@
 # %%
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.optim import Adam
 
-from ds.stl import STL, RectAvoidPredicte, RectReachPredicate
-from ds.utils import default_tensor
+# if JAX_BACKEND is set the import will be from jax.numpy
+if os.environ.get("JAX_STL_BACKEND") == "jax":
+    print("Using JAX backend")
+    from ds.stl_jax import STL, RectAvoidPredicte, RectReachPredicate
+    from ds.utils import default_tensor
+else:
+    print("Using PyTorch backend")
+    from ds.stl import STL, RectAvoidPredicte, RectReachPredicate
+    from ds.utils import default_tensor
 
 
 def eval_reach_avoid():
