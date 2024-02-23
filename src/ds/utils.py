@@ -15,7 +15,7 @@ if os.environ.get("JAX_STL_BACKEND") == "jax":
     DEFAULT_DATATYPE = jnp.float32
 
 
-    def default_tensor(x: np.ndarray, device: str = None, dtype=None) -> jnp.ndarray:
+    def default_tensor(x: np.ndarray, device: str = None, dtype=None) -> jnp.array:
         return jax.device_put(jnp.asarray(
             x,
             dtype=DEFAULT_DATATYPE if dtype is None else dtype,

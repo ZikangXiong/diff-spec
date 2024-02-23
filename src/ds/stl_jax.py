@@ -1,39 +1,39 @@
 import io
-import time
+import os
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
-from typing import TypeVar, Tuple
+from typing import TypeVar
 
-import gurobipy as gp
 import numpy as np
-import torch
-from gurobipy import GRB
-from stlpy.STL import LinearPredicate, NonlinearPredicate, STLTree
-from torch import Tensor
-from torch.nn.functional import softmax
+from jax.nn import softmax
+from stlpy.STL import LinearPredicate, STLTree
 
+os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
 from ds.utils import default_tensor
 
 with redirect_stdout(io.StringIO()):
-    from stlpy.solvers.base import STLSolver
+    pass
 
 import logging
 
-from .stl import colored, HARDNESS, GurobiMICPSolver, STLSolver
+from .stl import colored, HARDNESS, IMPLIES_TRICK
+
+# Replace with JAX
+import jax.numpy as jnp
 
 
 class PredicateBase:
     def __init__(self, name: str):
         self.name = name
 
-    def eval_at_t(self, path: Tensor, t: int = 0) -> Tensor:
+    def eval_at_t(self, path: jnp.ndarray, t: int = 0) -> jnp.ndarray:
         return self.eval_whole_path(path, t, t + 1)[:, 0]
 
     @abstractmethod
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.ndarray, start_t: int = 0, end_t: int = None
+    ) -> jnp.ndarray:
         raise NotImplementedError
 
     @abstractmethod
@@ -63,12 +63,12 @@ class RectReachPredicate(PredicateBase):
         self.size_tensor = default_tensor(size)
 
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
-        res = torch.min(
-            self.size_tensor / 2 - torch.abs(eval_path - self.cent_tensor), dim=-1
+        res = jnp.min(
+            self.size_tensor / 2 - jnp.abs(eval_path - self.cent_tensor), axis=-1
         )[0]
 
         return res
@@ -99,12 +99,12 @@ class RectAvoidPredicte(PredicateBase):
         self.size_tensor = default_tensor(size)
 
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
-        res = torch.max(
-            torch.abs(eval_path - self.cent_tensor) - self.size_tensor / 2, dim=-1
+        res = jnp.max(
+            jnp.abs(eval_path - self.cent_tensor) - self.size_tensor / 2, axis=-1
         )[0]
 
         return res
@@ -269,12 +269,12 @@ class STL:
         ast = ["U", self.ast, other.ast, start, end]
         return STL(ast)
 
-    def eval(self, path: Tensor, t: int = 0) -> Tensor:
+    def eval(self, path: jnp.array, t: int = 0) -> jnp.array:
         return self._eval(self.ast, path, t)
 
     def _eval(
-            self, ast: AST, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, ast: AST, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         if self._is_leaf(ast):
             return ast.eval_at_t(path, start_t)
 
@@ -308,51 +308,51 @@ class STL:
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         return self._tensor_min(
-            torch.stack(
+            jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t, end_t),
                     self._eval(sub_form2, path, start_t, end_t),
                 ],
-                dim=-1,
+                axis=-1,
             ),
-            dim=-1,
+            axis=-1,
         )
 
     def _eval_or(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         return self._tensor_max(
-            torch.stack(
+            jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t, end_t),
                     self._eval(sub_form2, path, start_t, end_t),
                 ],
-                dim=-1,
+                axis=-1,
             ),
-            dim=-1,
+            axis=-1,
         )
 
-    def _eval_not(self, ast: AST, path: Tensor, start_t: int, end_t: int) -> Tensor:
+    def _eval_not(self, ast: AST, path: jnp.array, start_t: int, end_t: int) -> jnp.array:
         return -self._eval(ast, path, start_t, end_t)
 
     def _eval_implies(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         if IMPLIES_TRICK:
             return self._eval(sub_form1, path, start_t, end_t) * self._eval(
                 sub_form2, path, start_t, end_t
@@ -360,84 +360,84 @@ class STL:
         return self._eval_or(["~", sub_form1], sub_form2, path, start_t, end_t)
 
     def _eval_always(
-            self, sub_form: AST, path: Tensor, start_t: int, end_t: int
-    ) -> Tensor:
+            self, sub_form: AST, path: jnp.array, start_t: int, end_t: int
+    ) -> jnp.array:
         if self._is_leaf(sub_form):
             return self._tensor_min(
-                sub_form.eval_whole_path(path[:, start_t:end_t]), dim=-1
+                sub_form.eval_whole_path(path[:, start_t:end_t]), axis=-1
             )
 
         # unroll always
-        val_per_time = torch.stack(
+        val_per_time = jnp.stack(
             [
                 self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
-            dim=-1,
+            axis=-1,
         )
 
-        return self._tensor_min(val_per_time, dim=-1)
+        return self._tensor_min(val_per_time, axis=-1)
 
     def _eval_eventually(
-            self, sub_form: AST, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, sub_form: AST, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         if self._is_leaf(sub_form):
             return self._tensor_max(
-                sub_form.eval_whole_path(path[:, start_t:end_t]), dim=-1
+                sub_form.eval_whole_path(path[:, start_t:end_t]), axis=-1
             )
 
         # unroll eventually
-        val_per_time = torch.stack(
+        val_per_time = jnp.stack(
             [
                 self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
-            dim=-1,
+            axis=-1,
         )
 
-        return self._tensor_max(val_per_time, dim=-1)
+        return self._tensor_max(val_per_time, axis=-1)
 
     def _eval_until(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         if self._is_leaf(sub_form2):
             till_pred = sub_form2.eval_whole_path(path[:, start_t:end_t])
         else:
-            till_pred = torch.stack(
+            till_pred = jnp.stack(
                 [
                     self._eval(sub_form2, path, start_t=t, end_t=end_t)
                     for t in range(end_t - start_t)
                 ],
-                dim=-1,
+                axis=-1,
             )
         # mask condition, once condition > 0 (after until True),
         # the right sequence is no longer considered
         cond = (till_pred > 0).int()
-        index = torch.argmax(cond, dim=-1)
+        index = jnp.argmax(cond, axis=-1)
         for i in range(cond.shape[0]):
             cond[i, index[i]:] = 1.0
         cond = ~cond.bool()
-        till_pred = torch.where(cond, till_pred, default_tensor(1))
+        till_pred = jnp.where(cond, till_pred, default_tensor(1))
 
         if self._is_leaf(sub_form1):
             res = sub_form1.eval_whole_path(path[:, start_t:end_t])
         else:
-            res = torch.stack(
+            res = jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t=t, end_t=end_t)
                     for t in range(end_t - start_t)
                 ],
-                dim=-1,
+                axis=-1,
             )
-        res = torch.where(cond, res, default_tensor(-1))
+        res = jnp.where(cond, res, default_tensor(-1))
 
         # when cond < 0, res should always > 0 to be hold
-        return self._tensor_min(-res * till_pred, dim=-1)
+        return self._tensor_min(-res * till_pred, axis=-1)
 
     def get_stlpy_form(self):
         # catch already converted form
@@ -507,13 +507,13 @@ class STL:
     def _is_leaf(ast: AST):
         return issubclass(type(ast), PredicateBase)
 
-    def _tensor_min(self, tensor: Tensor, dim=-1) -> Tensor:
-        ratio = softmax(tensor * -HARDNESS, dim=dim)
-        return torch.sum(tensor * ratio, dim=dim)
+    def _tensor_min(self, tensor: jnp.array, axis=-1) -> jnp.array:
+        ratio = softmax(tensor * -HARDNESS, axis=axis)
+        return jnp.sum(tensor * ratio, axis=axis)
 
-    def _tensor_max(self, tensor: Tensor, dim=-1) -> Tensor:
-        ratio = softmax(tensor * HARDNESS, dim=dim)
-        return torch.sum(tensor * ratio, dim=dim)
+    def _tensor_max(self, tensor: jnp.array, axis=-1) -> jnp.array:
+        ratio = softmax(tensor * HARDNESS, axis=axis)
+        return jnp.sum(tensor * ratio, axis=axis)
 
     def simplify(self):
         if self.stlpy_form is None:

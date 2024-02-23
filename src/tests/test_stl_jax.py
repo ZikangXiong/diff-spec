@@ -9,7 +9,9 @@ from examples.stl.differentiability import eval_reach_avoid
 class TestJAXExamples(unittest.TestCase):
 
     def test_run(self):
-        eval_reach_avoid()
+        # TODO: Study jit decorator and see optimizations
+        for _ in range(1000):
+            eval_reach_avoid()
         #
         # self.assertEqual(True, False)  # add assertion here
 
