@@ -407,7 +407,7 @@ class RectReachPredicate(PredicateBase):
         return inside_rectangle_formula(bounds, 0, 1, 2, self.name)
 
 
-class RectAvoidPredicte(PredicateBase):
+class RectAvoidPredicate(PredicateBase):
     """
     Rectangle avoidance predicate
     """

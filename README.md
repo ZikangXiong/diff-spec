@@ -9,10 +9,13 @@ pip install git+https://github.com/ZikangXiong/diff-spec.git
 ```
 
 ## First Order Logic
-[First-order logic](https://en.wikipedia.org/wiki/First-order_logic) is a logic formalism to describe the behavior of a system. It contains basic logic operators such as `and`, `or`, `not`, and quantifiers like `forall`, and `exists`. 
 
-We can connect any differentiable components with logical operators, with the requirement that a component outputs a great-than-0 value representing 
-`true` and a less-than-0 value representing `false`. 
+[First-order logic](https://en.wikipedia.org/wiki/First-order_logic) is a logic formalism to describe the behavior of a
+system. It contains basic logic operators such as `and`, `or`, `not`, and quantifiers like `forall`, and `exists`.
+
+We can connect any differentiable components with logical operators, with the requirement that a component outputs a
+great-than-0 value representing
+`true` and a less-than-0 value representing `false`.
 
 ```python
 p1 = InFirstQuadrant()
@@ -27,14 +30,20 @@ print(f)
 # ((((∀ InFirstQuadrant) & (∃ XGreatThan(2.0))) & (∀ XLessThan(3.0))) & (∀ YLessThan(3.0)))
 ```
 
-p1-4 can be any differentiable components, including neural networks. In the above example, p1 is a predicate that checks if the input is in the first quadrant. p2-4 are predicates that check if the input is greater than 2, less than 3, and less than 3 in the x and y-axis, respectively.
+p1-4 can be any differentiable components, including neural networks. In the above example, p1 is a predicate that
+checks if the input is in the first quadrant. p2-4 are predicates that check if the input is greater than 2, less than
+3, and less than 3 in the x and y-axis, respectively.
 
 One can optimize a world of inputs to satisfy the formula with [gradient](examples/fol/differentiability.py).
 
 ## Signal Temporal Logic
-[Signal temporal logic](https://people.eecs.berkeley.edu/~sseshia/fmee/lectures/EECS294-98_Spring2014_STL_Lecture.pdf) is a formal language to describe the behavior of a dynamical system. It is widely used in the formal verification of cyber-physical systems. 
 
-We can use STL to describe the behavior of a system. For example, we can use STL to describe repeatedly visit `goal_1` and `goal_2` in timestep 0 to 13.
+[Signal temporal logic](https://people.eecs.berkeley.edu/~sseshia/fmee/lectures/EECS294-98_Spring2014_STL_Lecture.pdf)
+is a formal language to describe the behavior of a dynamical system. It is widely used in the formal verification of
+cyber-physical systems.
+
+We can use STL to describe the behavior of a system. For example, we can use STL to describe repeatedly visit `goal_1`
+and `goal_2` in timestep 0 to 13.
 
 ```python
 # goal_1 is a rectangle area centered in [0, 0] with width and height 1
@@ -48,13 +57,41 @@ goal_2 = STL(RectReachPredicate(np.array([2, 2]), np.array([1, 1]), "goal_2"))
 form = (goal_1.eventually(0, 5) & goal_2.eventually(0, 5)).always(0, 8)
 ```
 
-We can synthesize a trace with [gradient](examples/stl/differentiability.py) or [mixed-integer programming](examples/stl/solver.py).
+We can synthesize a trace with [gradient](examples/stl/differentiability.py)
+or [mixed-integer programming](examples/stl/solver.py).
 
 <!-- ## Probability Temporal Logic (Ongoing)
 Probability temporal logic is an ongoing work integrating probability and random variables into temporal logic. It is useful in robot planning and control, reinforcement learning, and formal verification. -->
 
+## JAX Backend
+
+If you are using JAX, you can use the JAX backend (stl_jax) and gain immense speedups in many cases.
+
+First set the backend to JAX:
+
+```python
+import os
+
+os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX
+```
+
+Then you can use the JAX backend to optimize the inputs to satisfy the formula.
+
+```python
+from ds.stl_jax import STL, RectAvoidPredicate, RectReachPredicate
+from ds.utils import default_tensor
+```
+
+For a comparison of the speedup, you can run the [JAX backend test](tests/test_stl_jax.py) and compare it with
+the [PyTorch backend test](tests/test_stl.py).
+Be sure to use JIT (carefully) and other JAX optimizations to get the best performance.
+
+For example, on our test machine, the given test cases on the JAX backend are 2x faster than the PyTorch backend.
+
 ## Citation
+
 If you find this repository useful in your research, considering to cite:
+
 ```bibtex
 @misc{xiong2023diffspec,
       title={DiffSpec: A Differentiable Logic Specification Framework},

@@ -4,8 +4,8 @@ with open("requirements.txt") as f:
     REQUIRED_PACKAGES = f.read().splitlines()
 
 setup(
-    name="differntiable-symbolic-specification",
-    version="0.1.0",
+    name="diff-spec",
+    version="0.2.0",
     description="Differentiable Symbolic Specification",
     author="Zikang Xiong",
     package_dir={"": "src"},

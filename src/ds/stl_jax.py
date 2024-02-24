@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import redirect_stdout
 from typing import TypeVar
 
+import jax
 import numpy as np
 from jax.nn import softmax
 from stlpy.STL import LinearPredicate, STLTree
@@ -80,7 +81,7 @@ class RectReachPredicate(PredicateBase):
         return inside_rectangle_formula(bounds, 0, 1, 2, self.name)
 
 
-class RectAvoidPredicte(PredicateBase):
+class RectAvoidPredicate(PredicateBase):
     """
     Rectangle avoidance predicate
     """
