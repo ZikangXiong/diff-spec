@@ -17,7 +17,7 @@ else:
     from ds.utils import default_tensor
 
 
-def eval_reach_avoid():
+def eval_reach_avoid(mute=False):
     """
     The evaluation of a formula
     """
@@ -69,13 +69,16 @@ def eval_reach_avoid():
     )
 
     # eval the formula, default at time 0
-    res = form.eval(path=path_1)
-    print("eval result at time 0: ", res)
+    res1 = form.eval(path=path_1)
+    if not mute:
+        print("eval result at time 0: ", res1)
 
     # eval the formula at time 2
-    res = form.eval(path=path_1, t=2)
-    print("eval result at time 2: ", res)
+    res2 = form.eval(path=path_1, t=2)
+    if not mute:
+        print("eval result at time 2: ", res2)
 
+    return res1, res2
 
 def backward():
     """
