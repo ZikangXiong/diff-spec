@@ -3,6 +3,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import optax
 
 # if JAX_BACKEND is set the import will be from jax.numpy
 if os.environ.get("JAX_STL_BACKEND") == "jax":
@@ -125,14 +126,23 @@ def backward(mute=True):
 
     if os.environ.get("JAX_STL_BACKEND") == "jax":
 
+        solver = optax.adam(lr)
+        var_solver_state = solver.init(path)
+
         @jax.jit
-        def update_path(path):
-            # Only JIT functionally pure functions with no side effects (form.eval is considered pure)
-            grad_val = -jax.grad(form.eval)(path)
-            return path - lr * grad_val
+        def train_step(params, solver_state):
+            # Performs a one step update.
+            (loss), grad = jax.value_and_grad(form.eval)(
+                params
+            )
+            updates, solver_state = solver.update(-grad, solver_state)
+            params = optax.apply_updates(params, updates)
+            return params, solver_state, loss
 
         for _ in range(num_iterations):
-            path = update_path(path)
+            path, var_solver_state, train_loss = train_step(
+                path, var_solver_state
+            )
 
         loss = form.eval(path)
     else:
