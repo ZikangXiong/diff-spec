@@ -2,9 +2,9 @@ import io
 import time
 from abc import abstractmethod
 from collections import deque
+from contextlib import contextmanager
 from contextlib import redirect_stdout
 from typing import TypeVar, Tuple
-from contextlib import contextmanager
 
 import gurobipy as gp
 import numpy as np
@@ -40,7 +40,6 @@ def set_hardness(hardness: float):
     HARDNESS = hardness
     yield
     HARDNESS = old_hardness
-
 
 
 if COLORED:
@@ -94,15 +93,15 @@ class GurobiMICPSolver(STLSolver):
     """
 
     def __init__(
-        self,
-        spec,
-        sys,
-        x0,
-        T,
-        M=1000,
-        robustness_cost=True,
-        presolve=True,
-        verbose=True,
+            self,
+            spec,
+            sys,
+            x0,
+            T,
+            M=1000,
+            robustness_cost=True,
+            presolve=True,
+            verbose=True,
     ):
         assert M > 0, "M should be a (large) positive scalar"
         super().__init__(spec, sys, x0, T, verbose)
@@ -158,7 +157,7 @@ class GurobiMICPSolver(STLSolver):
         self.cost += self.x[:, 0] @ Q @ self.x[:, 0] + self.u[:, 0] @ R @ self.u[:, 0]
         for t in range(1, self.T):
             self.cost += (
-                self.x[:, t] @ Q @ self.x[:, t] + self.u[:, t] @ R @ self.u[:, t]
+                    self.x[:, t] @ Q @ self.x[:, t] + self.u[:, t] @ R @ self.u[:, t]
             )
 
     def AddRobustnessCost(self):
@@ -321,16 +320,16 @@ class StlpySolver:
         return sys
 
     def solve_stlpy_formula(
-        self,
-        spec: STLTree,
-        x0: np.ndarray,
-        total_time: int,
-        solver_name="gurobi",
-        u_bound: tuple = (-20.0, 20.0),
-        rho_min: float = 0.1,
-        energy_obj: bool = True,
-        time_limit=20,
-        threads=1,
+            self,
+            spec: STLTree,
+            x0: np.ndarray,
+            total_time: int,
+            solver_name="gurobi",
+            u_bound: tuple = (-20.0, 20.0),
+            rho_min: float = 0.1,
+            energy_obj: bool = True,
+            time_limit=20,
+            threads=1,
     ) -> Tuple[np.ndarray, dict]:
         """
         Solve the STL formula
@@ -376,7 +375,7 @@ class PredicateBase:
 
     @abstractmethod
     def eval_whole_path(
-        self, path: Tensor, start_t: int = 0, end_t: int = None
+            self, path: Tensor, start_t: int = 0, end_t: int = None
     ) -> Tensor:
         raise NotImplementedError
 
@@ -393,7 +392,7 @@ class RectReachPredicate(PredicateBase):
     Rectangle reachability predicate
     """
 
-    def __init__(self, cent: np.ndarray, size: np.ndarray, name: str, shrink_factor=0.5):
+    def __init__(self, cent: np.ndarray, size: np.ndarray, name: str, shrink_factor: float = 0.5):
         """
         :param cent: center of the rectangle
         :param size: bound of the rectangle
@@ -409,7 +408,7 @@ class RectReachPredicate(PredicateBase):
         print(f"shrink factor: {shrink_factor}")
 
     def eval_whole_path(
-        self, path: Tensor, start_t: int = 0, end_t: int = None
+            self, path: Tensor, start_t: int = 0, end_t: int = None
     ) -> Tensor:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
@@ -445,7 +444,7 @@ class RectAvoidPredicate(PredicateBase):
         self.size_tensor = default_tensor(size)
 
     def eval_whole_path(
-        self, path: Tensor, start_t: int = 0, end_t: int = None
+            self, path: Tensor, start_t: int = 0, end_t: int = None
     ) -> Tensor:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
@@ -639,7 +638,7 @@ class STL:
         return max(self._get_end_time(ast[1]), self._get_end_time(ast[2]))
 
     def _eval(
-        self, ast: AST, path: Tensor, start_t: int = 0, end_t: int = None
+            self, ast: AST, path: Tensor, start_t: int = 0, end_t: int = None
     ) -> Tensor:
         if self._is_leaf(ast):
             return ast.eval_at_t(path, start_t)
@@ -671,12 +670,12 @@ class STL:
         return res
 
     def _eval_and(
-        self,
-        sub_form1: AST,
-        sub_form2: AST,
-        path: Tensor,
-        start_t: int = 0,
-        end_t: int = None,
+            self,
+            sub_form1: AST,
+            sub_form2: AST,
+            path: Tensor,
+            start_t: int = 0,
+            end_t: int = None,
     ) -> Tensor:
         return self._tensor_min(
             torch.stack(
@@ -690,12 +689,12 @@ class STL:
         )
 
     def _eval_or(
-        self,
-        sub_form1: AST,
-        sub_form2: AST,
-        path: Tensor,
-        start_t: int = 0,
-        end_t: int = None,
+            self,
+            sub_form1: AST,
+            sub_form2: AST,
+            path: Tensor,
+            start_t: int = 0,
+            end_t: int = None,
     ) -> Tensor:
         return self._tensor_max(
             torch.stack(
@@ -712,12 +711,12 @@ class STL:
         return -self._eval(ast, path, start_t, end_t)
 
     def _eval_implies(
-        self,
-        sub_form1: AST,
-        sub_form2: AST,
-        path: Tensor,
-        start_t: int = 0,
-        end_t: int = None,
+            self,
+            sub_form1: AST,
+            sub_form2: AST,
+            path: Tensor,
+            start_t: int = 0,
+            end_t: int = None,
     ) -> Tensor:
         if IMPLIES_TRICK:
             return self._eval(sub_form1, path, start_t, end_t) * self._eval(
@@ -726,7 +725,7 @@ class STL:
         return self._eval_or(["~", sub_form1], sub_form2, path, start_t, end_t)
 
     def _eval_always(
-        self, sub_form: AST, path: Tensor, start_t: int, end_t: int
+            self, sub_form: AST, path: Tensor, start_t: int, end_t: int
     ) -> Tensor:
         if self._is_leaf(sub_form):
             return self._tensor_min(
@@ -745,7 +744,7 @@ class STL:
         return self._tensor_min(val_per_time, dim=-1)
 
     def _eval_eventually(
-        self, sub_form: AST, path: Tensor, start_t: int = 0, end_t: int = None
+            self, sub_form: AST, path: Tensor, start_t: int = 0, end_t: int = None
     ) -> Tensor:
         if self._is_leaf(sub_form):
             return self._tensor_max(
@@ -764,12 +763,12 @@ class STL:
         return self._tensor_max(val_per_time, dim=-1)
 
     def _eval_until(
-        self,
-        sub_form1: AST,
-        sub_form2: AST,
-        path: Tensor,
-        start_t: int = 0,
-        end_t: int = None,
+            self,
+            sub_form1: AST,
+            sub_form2: AST,
+            path: Tensor,
+            start_t: int = 0,
+            end_t: int = None,
     ) -> Tensor:
         if self._is_leaf(sub_form2):
             till_pred = sub_form2.eval_whole_path(path[:, start_t:end_t])
@@ -786,7 +785,7 @@ class STL:
         cond = (till_pred > 0).int()
         index = torch.argmax(cond, dim=-1)
         for i in range(cond.shape[0]):
-            cond[i, index[i] :] = 1.0
+            cond[i, index[i]:] = 1.0
         cond = ~cond.bool()
         till_pred = torch.where(cond, till_pred, default_tensor(1))
 
