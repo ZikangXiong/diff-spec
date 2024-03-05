@@ -4,6 +4,7 @@ from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
 from typing import TypeVar, Tuple
+from contextlib import contextmanager
 
 import gurobipy as gp
 import numpy as np
@@ -23,7 +24,23 @@ import logging
 
 COLORED = False
 IMPLIES_TRICK = False
-HARDNESS = 10.0  # Reduce hardness of softmax to propagate gradients more easily
+HARDNESS = 100.0  # Reduce hardness of softmax to propagate gradients more easily
+
+
+@contextmanager
+def set_hardness(hardness: float):
+    """Set the hardness of the softmax function for the duration of the context.
+    Useful for making evaluation strict while allowing gradients to pass through during training.
+
+    :param hardness: hardness of the softmax function
+    :type hardness: float
+    """
+    global HARDNESS
+    old_hardness = HARDNESS
+    HARDNESS = hardness
+    yield
+    HARDNESS = old_hardness
+
 
 
 if COLORED:
@@ -376,7 +393,7 @@ class RectReachPredicate(PredicateBase):
     Rectangle reachability predicate
     """
 
-    def __init__(self, cent: np.ndarray, size: np.ndarray, name: str):
+    def __init__(self, cent: np.ndarray, size: np.ndarray, name: str, shrink_factor=0.5):
         """
         :param cent: center of the rectangle
         :param size: bound of the rectangle
@@ -388,6 +405,8 @@ class RectReachPredicate(PredicateBase):
 
         self.cent_tensor = default_tensor(cent)
         self.size_tensor = default_tensor(size)
+        self.shrink_factor = shrink_factor  # shrink the rectangle to make it more conservative
+        print(f"shrink factor: {shrink_factor}")
 
     def eval_whole_path(
         self, path: Tensor, start_t: int = 0, end_t: int = None
@@ -402,7 +421,7 @@ class RectReachPredicate(PredicateBase):
 
     def get_stlpy_form(self) -> STLTree:
         bounds = np.stack(
-            [self.cent - self.size / 2, self.cent + self.size / 2]
+            [self.cent - self.size * self.shrink_factor / 2, self.cent + self.size * self.shrink_factor / 2]
         ).T.flatten()
         return inside_rectangle_formula(bounds, 0, 1, 2, self.name)
 
@@ -554,6 +573,7 @@ class STL:
     """
     Class for representing STL formulas.
     """
+    end_t: int
 
     def __init__(self, ast: AST):
         self.ast = ast
@@ -562,6 +582,7 @@ class STL:
         self.sequence_operators = ("G", "F", "U")
         self.stlpy_form = None
         self.expr_repr = None
+        self.end_t = None  # Populated when evaluating
         self.logger = logging.getLogger(__name__)
 
     """
@@ -598,6 +619,24 @@ class STL:
 
     def eval(self, path: Tensor, t: int = 0) -> Tensor:
         return self._eval(self.ast, path, t)
+
+    def end_time(self) -> int:
+        """Get the end time of the formula efficiently."""
+        if self.end_t is None:
+            # Evaluate the formula to get the end time
+            # Get max of binary tree at self.ast
+            self.end_t = self._get_end_time(self.ast)
+        return self.end_t
+
+    def _get_end_time(self, ast: AST) -> int:
+        """Get max time of the formula. Runs in O(n) time where n is the number of nodes. Runs once then memoizes."""
+        if self._is_leaf(ast):
+            return 1
+        if ast[0] in self.sequence_operators:
+            # The last two elements are the start and end times
+            return ast[-1]
+        # Is binary operator
+        return max(self._get_end_time(ast[1]), self._get_end_time(ast[2]))
 
     def _eval(
         self, ast: AST, path: Tensor, start_t: int = 0, end_t: int = None
