@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.optim import Adam
 
-from ds.stl import STL, RectAvoidPredicte, RectReachPredicate
+from ds.stl import STL, RectAvoidPredicate, RectReachPredicate
 from ds.utils import default_tensor
 
 
@@ -17,7 +17,7 @@ def eval_reach_avoid():
     # goal is a rectangle area centered in [0, 0] with width and height 1
     goal = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal"))
     # obs is a rectangle area centered in [3, 2] with width and height 1
-    obs = STL(RectAvoidPredicte(np.array([3, 2]), np.array([1, 1]), "obs"))
+    obs = STL(RectAvoidPredicate(np.array([3, 2]), np.array([1, 1]), "obs"))
     # form is the formula goal eventually in 0 to 10 and avoid obs always in 0 to 10
     form = goal.eventually(0, 10) & obs.always(0, 10)
 
