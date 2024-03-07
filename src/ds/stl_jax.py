@@ -1,382 +1,40 @@
 import io
-import time
+import os
 from abc import abstractmethod
 from collections import deque
-from contextlib import contextmanager
 from contextlib import redirect_stdout
-from typing import TypeVar, Tuple
+from typing import TypeVar
 
-import gurobipy as gp
+import jax
 import numpy as np
-import torch
-from gurobipy import GRB
-from stlpy.STL import LinearPredicate, NonlinearPredicate, STLTree
-from stlpy.systems import LinearSystem
-from torch import Tensor
-from torch.nn.functional import softmax
+from jax.nn import softmax
+from stlpy.STL import LinearPredicate, STLTree
 
+os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
 from ds.utils import default_tensor
 
 with redirect_stdout(io.StringIO()):
-    from stlpy.solvers.base import STLSolver
+    pass
 
 import logging
 
-COLORED = False
-IMPLIES_TRICK = False
-HARDNESS = 100.0  # Reduce hardness of softmax to propagate gradients more easily
+from .stl import colored, HARDNESS, IMPLIES_TRICK, set_hardness
 
-
-@contextmanager
-def set_hardness(hardness: float):
-    """Set the hardness of the softmax function for the duration of the context.
-    Useful for making evaluation strict while allowing gradients to pass through during training.
-
-    :param hardness: hardness of the softmax function
-    :type hardness: float
-    """
-    global HARDNESS
-    old_hardness = HARDNESS
-    HARDNESS = hardness
-    yield
-    HARDNESS = old_hardness
-
-
-if COLORED:
-    from termcolor import colored
-else:
-
-    def colored(text, color):
-        return text
-
-
-class GurobiMICPSolver(STLSolver):
-    """
-    Given an :class:`.STLFormula` :math:`\\varphi` and a :class:`.LinearSystem`,
-    solve the optimization problem
-
-    .. math::
-
-        \min & -\\rho^{\\varphi}(y_0,y_1,\dots,y_T) + \sum_{t=0}^T x_t^TQx_t + u_t^TRu_t
-
-        \\text{s.t. } & x_0 \\text{ fixed}
-
-        & x_{t+1} = A x_t + B u_t
-
-        & y_{t} = C x_t + D u_t
-
-        & \\rho^{\\varphi}(y_0,y_1,\dots,y_T) \geq 0
-
-    with Gurobi using mixed-integer convex programming. This gives a globally optimal
-    solution, but may be computationally expensive for long and complex specifications.
-
-    .. note::
-
-        This class implements the algorithm described in
-
-        Belta C, et al.
-        *Formal methods for control synthesis: an optimization perspective*.
-        Anual Review of Control, Robotics, and Autonomous Systems, 2019.
-
-    :param spec:            An :class:`.STLFormula` describing the specification.
-    :param sys:             A :class:`.LinearSystem` describing the system dynamics.
-    :param x0:              A ``(n,1)`` numpy matrix describing the initial state.
-    :param T:               A positive integer fixing the total number of timesteps :math:`T`.
-    :param M:               (optional) A large positive scalar used to rewrite ``min`` and ``max`` as
-                            mixed-integer constraints. Default is ``1000``.
-    :param robustness_cost: (optional) Boolean flag for adding a linear cost to maximize
-                            the robustness measure. Default is ``True``.
-    :param presolve:        (optional) A boolean indicating whether to use Gurobi's
-                            presolve routines. Default is ``True``.
-    :param verbose:         (optional) A boolean indicating whether to print detailed
-                            solver info. Default is ``True``.
-    """
-
-    def __init__(
-            self,
-            spec,
-            sys,
-            x0,
-            T,
-            M=1000,
-            robustness_cost=True,
-            presolve=True,
-            verbose=True,
-    ):
-        assert M > 0, "M should be a (large) positive scalar"
-        super().__init__(spec, sys, x0, T, verbose)
-
-        self.M = float(M)
-        self.presolve = presolve
-
-        # Set up the optimization problem
-        self.model = gp.Model("STL_MICP")
-
-        # Store the cost function, which will added to self.model right before solving
-        self.cost = 0.0
-
-        # Set some model parameters
-        if not self.presolve:
-            self.model.setParam("Presolve", 0)
-        if not self.verbose:
-            self.model.setParam("OutputFlag", 0)
-
-        if self.verbose:
-            print("Setting up optimization problem...")
-            st = time.time()  # for computing setup time
-
-        # Create optimization variables
-        self.y = self.model.addMVar((self.sys.p, self.T), lb=-float("inf"), name="y")
-        self.x = self.model.addMVar((self.sys.n, self.T), lb=-float("inf"), name="x")
-        self.u = self.model.addMVar((self.sys.m, self.T), lb=-float("inf"), name="u")
-        self.rho = self.model.addMVar(
-            1, name="rho", lb=0.0
-        )  # lb sets minimum robustness
-
-        # Add cost and constraints to the optimization problem
-        self.AddDynamicsConstraints()
-        self.AddSTLConstraints()
-        self.AddRobustnessConstraint()
-        if robustness_cost:
-            self.AddRobustnessCost()
-
-        if self.verbose:
-            print(f"Setup complete in {time.time() - st} seconds.")
-
-    def AddControlBounds(self, u_min, u_max):
-        for t in range(self.T):
-            self.model.addConstr(u_min <= self.u[:, t])
-            self.model.addConstr(self.u[:, t] <= u_max)
-
-    def AddStateBounds(self, x_min, x_max):
-        for t in range(self.T):
-            self.model.addConstr(x_min <= self.x[:, t])
-            self.model.addConstr(self.x[:, t] <= x_max)
-
-    def AddQuadraticCost(self, Q, R):
-        self.cost += self.x[:, 0] @ Q @ self.x[:, 0] + self.u[:, 0] @ R @ self.u[:, 0]
-        for t in range(1, self.T):
-            self.cost += (
-                    self.x[:, t] @ Q @ self.x[:, t] + self.u[:, t] @ R @ self.u[:, t]
-            )
-
-    def AddRobustnessCost(self):
-        self.cost -= 1 * self.rho
-
-    def AddRobustnessConstraint(self, rho_min=0.0):
-        self.model.addConstr(self.rho >= rho_min)
-
-    def Solve(self, time_limit=None, threads=0):
-        # Set the cost function now, right before we solve.
-        # This is needed since model.setObjective resets the cost.
-        self.model.setObjective(self.cost, GRB.MINIMIZE)
-        if time_limit is not None:
-            self.model.setParam("TimeLimit", time_limit)
-        if threads > 0:
-            self.model.setParam("Threads", threads)
-
-        # Do the actual solving
-        self.model.optimize()
-
-        if self.model.status == GRB.OPTIMAL:
-            if self.verbose:
-                print("\nOptimal Solution Found!\n")
-            x = self.x.X
-            u = self.u.X
-            rho = self.rho.X[0]
-
-            # Report optimal cost and robustness
-            if self.verbose:
-                print("Solve time: ", self.model.Runtime)
-                print("Optimal robustness: ", rho)
-                print("")
-        else:
-            if self.verbose:
-                print(f"\nOptimization failed with status {self.model.status}.\n")
-            x = None
-            u = None
-            rho = -np.inf
-
-        return (x, u, rho, self.model.Runtime)
-
-    def AddDynamicsConstraints(self):
-        # Initial condition
-        self.model.addConstr(self.x[:, 0] == self.x0)
-
-        # Dynamics
-        for t in range(self.T - 1):
-            self.model.addConstr(
-                self.x[:, t + 1]
-                == self.sys.A @ self.x[:, t] + self.sys.B @ self.u[:, t]
-            )
-
-            self.model.addConstr(
-                self.y[:, t] == self.sys.C @ self.x[:, t] + self.sys.D @ self.u[:, t]
-            )
-
-        self.model.addConstr(
-            self.y[:, self.T - 1]
-            == self.sys.C @ self.x[:, self.T - 1] + self.sys.D @ self.u[:, self.T - 1]
-        )
-
-    def AddSTLConstraints(self):
-        """
-        Add the STL constraints
-
-            (x,u) |= specification
-
-        to the optimization problem, via the recursive introduction
-        of binary variables for all subformulas in the specification.
-        """
-        # Recursively traverse the tree defined by the specification
-        # to add binary variables and constraints that ensure that
-        # rho is the robustness value
-        z_spec = self.model.addMVar(1, vtype=GRB.CONTINUOUS)
-        self.AddSubformulaConstraints(self.spec, z_spec, 0)
-        self.model.addConstr(z_spec == 1)
-
-    def AddSubformulaConstraints(self, formula, z, t):
-        """
-        Given an STLFormula (formula) and a binary variable (z),
-        add constraints to the optimization problem such that z
-        takes value 1 only if the formula is satisfied (at time t).
-
-        If the formula is a predicate, this constraint uses the "big-M"
-        formulation
-
-            A[x(t);u(t)] - b + (1-z)M >= 0,
-
-        which enforces A[x;u] - b >= 0 if z=1, where (A,b) are the
-        linear constraints associated with this predicate.
-
-        If the formula is not a predicate, we recursively traverse the
-        subformulas associated with this formula, adding new binary
-        variables z_i for each subformula and constraining
-
-            z <= z_i  for all i
-
-        if the subformulas are combined with conjunction (i.e. all
-        subformulas must hold), or otherwise constraining
-
-            z <= sum(z_i)
-
-        if the subformulas are combined with disjuction (at least one
-        subformula must hold).
-        """
-        # We're at the bottom of the tree, so add the big-M constraints
-        if isinstance(formula, LinearPredicate):
-            # a.T*y - b + (1-z)*M >= rho
-            self.model.addConstr(
-                formula.a.T @ self.y[:, t] - formula.b + (1 - z) * self.M >= self.rho
-            )
-
-            # Force z to be binary
-            b = self.model.addMVar(1, vtype=GRB.BINARY)
-            self.model.addConstr(z == b)
-
-        elif isinstance(formula, NonlinearPredicate):
-            raise TypeError(
-                "Mixed integer programming does not support nonlinear predicates"
-            )
-
-        # We haven't reached the bottom of the tree, so keep adding
-        # boolean constraints recursively
-        else:
-            if formula.combination_type == "and":
-                for i, subformula in enumerate(formula.subformula_list):
-                    z_sub = self.model.addMVar(1, vtype=GRB.CONTINUOUS)
-                    t_sub = formula.timesteps[i]  # the timestep at which this formula
-                    # should hold
-                    self.AddSubformulaConstraints(subformula, z_sub, t + t_sub)
-                    self.model.addConstr(z <= z_sub)
-
-            else:  # combination_type == "or":
-                z_subs = []
-                for i, subformula in enumerate(formula.subformula_list):
-                    z_sub = self.model.addMVar(1, vtype=GRB.CONTINUOUS)
-                    z_subs.append(z_sub)
-                    t_sub = formula.timesteps[i]
-                    self.AddSubformulaConstraints(subformula, z_sub, t + t_sub)
-                self.model.addConstr(z <= sum(z_subs))
-
-
-class StlpySolver:
-    """
-    A class for solving STL specifications using mixed-integer programming.
-    """
-
-    def __init__(self, space_dim: int):
-        self.space_dim = space_dim
-        self._ctrl_sys = self._get_ctrl_system(space_dim)
-
-    @staticmethod
-    def _get_ctrl_system(dim: int):
-        A = np.eye(dim)
-        B = np.eye(dim)
-        C = np.eye(dim)
-        D = np.zeros([dim, dim])
-        sys = LinearSystem(A, B, C, D)
-
-        return sys
-
-    def solve_stlpy_formula(
-            self,
-            spec: STLTree,
-            x0: np.ndarray,
-            total_time: int,
-            solver_name="gurobi",
-            u_bound: tuple = (-20.0, 20.0),
-            rho_min: float = 0.1,
-            energy_obj: bool = True,
-            time_limit=20,
-            threads=1,
-    ) -> Tuple[np.ndarray, dict]:
-        """
-        Solve the STL formula
-        spec: stlpy formula
-        x0: initial state
-        total_time: total time steps
-        solver_name: solver name
-        u_bound: control input bound
-        rho_min: robustness lower bound
-        energy_obj: whether to minimize the energy
-        time_limit: time limit for the solver
-        threads: number of threads for the solver
-        """
-        if solver_name == "gurobi":
-            solver = GurobiMICPSolver(
-                spec, self._ctrl_sys, x0, total_time, verbose=False
-            )
-        else:
-            raise NotImplementedError(f"{solver_name} is not supported yet")
-
-        if energy_obj:
-            solver.AddQuadraticCost(
-                Q=np.diag(0.0 * np.random.random(self.space_dim)),
-                R=np.eye(self.space_dim),
-            )
-        solver.AddControlBounds(*u_bound)
-        solver.AddRobustnessConstraint(rho_min=rho_min)
-        x, u, rho, solve_t = solver.Solve(time_limit=time_limit, threads=threads)
-
-        info = dict(u=u, rho=rho, solve_t=solve_t)
-
-        if x is not None:
-            x = np.array(x).T
-        return x, info
+# Replace with JAX
+import jax.numpy as jnp
 
 
 class PredicateBase:
     def __init__(self, name: str):
         self.name = name
 
-    def eval_at_t(self, path: Tensor, t: int = 0) -> Tensor:
+    def eval_at_t(self, path: jnp.ndarray, t: int = 0) -> jnp.ndarray:
         return self.eval_whole_path(path, t, t + 1)[:, 0]
 
     @abstractmethod
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.ndarray, start_t: int = 0, end_t: int = None
+    ) -> jnp.ndarray:
         raise NotImplementedError
 
     @abstractmethod
@@ -408,12 +66,12 @@ class RectReachPredicate(PredicateBase):
         print(f"shrink factor: {shrink_factor}")
 
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
-        res = torch.min(
-            self.size_tensor / 2 - torch.abs(eval_path - self.cent_tensor), dim=-1
+        res = jnp.min(
+            self.size_tensor / 2 - jnp.abs(eval_path - self.cent_tensor), axis=-1
         )[0]
 
         return res
@@ -444,12 +102,12 @@ class RectAvoidPredicate(PredicateBase):
         self.size_tensor = default_tensor(size)
 
     def eval_whole_path(
-            self, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
-        res = torch.max(
-            torch.abs(eval_path - self.cent_tensor) - self.size_tensor / 2, dim=-1
+        res = jnp.max(
+            jnp.abs(eval_path - self.cent_tensor) - self.size_tensor / 2, axis=-1
         )[0]
 
         return res
@@ -572,7 +230,6 @@ class STL:
     """
     Class for representing STL formulas.
     """
-    end_t: int
 
     def __init__(self, ast: AST):
         self.ast = ast
@@ -616,7 +273,7 @@ class STL:
         ast = ["U", self.ast, other.ast, start, end]
         return STL(ast)
 
-    def eval(self, path: Tensor, t: int = 0) -> Tensor:
+    def eval(self, path: jnp.array, t: int = 0) -> jnp.array:
         return self._eval(self.ast, path, t)
 
     def end_time(self) -> int:
@@ -638,8 +295,8 @@ class STL:
         return max(self._get_end_time(ast[1]), self._get_end_time(ast[2]))
 
     def _eval(
-            self, ast: AST, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, ast: AST, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         if self._is_leaf(ast):
             return ast.eval_at_t(path, start_t)
 
@@ -673,51 +330,51 @@ class STL:
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         return self._tensor_min(
-            torch.stack(
+            jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t, end_t),
                     self._eval(sub_form2, path, start_t, end_t),
                 ],
-                dim=-1,
+                axis=-1,
             ),
-            dim=-1,
+            axis=-1,
         )
 
     def _eval_or(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         return self._tensor_max(
-            torch.stack(
+            jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t, end_t),
                     self._eval(sub_form2, path, start_t, end_t),
                 ],
-                dim=-1,
+                axis=-1,
             ),
-            dim=-1,
+            axis=-1,
         )
 
-    def _eval_not(self, ast: AST, path: Tensor, start_t: int, end_t: int) -> Tensor:
+    def _eval_not(self, ast: AST, path: jnp.array, start_t: int, end_t: int) -> jnp.array:
         return -self._eval(ast, path, start_t, end_t)
 
     def _eval_implies(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         if IMPLIES_TRICK:
             return self._eval(sub_form1, path, start_t, end_t) * self._eval(
                 sub_form2, path, start_t, end_t
@@ -725,84 +382,84 @@ class STL:
         return self._eval_or(["~", sub_form1], sub_form2, path, start_t, end_t)
 
     def _eval_always(
-            self, sub_form: AST, path: Tensor, start_t: int, end_t: int
-    ) -> Tensor:
+            self, sub_form: AST, path: jnp.array, start_t: int, end_t: int
+    ) -> jnp.array:
         if self._is_leaf(sub_form):
             return self._tensor_min(
-                sub_form.eval_whole_path(path[:, start_t:end_t]), dim=-1
+                sub_form.eval_whole_path(path[:, start_t:end_t]), axis=-1
             )
 
         # unroll always
-        val_per_time = torch.stack(
+        val_per_time = jnp.stack(
             [
                 self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
-            dim=-1,
+            axis=-1,
         )
 
-        return self._tensor_min(val_per_time, dim=-1)
+        return self._tensor_min(val_per_time, axis=-1)
 
     def _eval_eventually(
-            self, sub_form: AST, path: Tensor, start_t: int = 0, end_t: int = None
-    ) -> Tensor:
+            self, sub_form: AST, path: jnp.array, start_t: int = 0, end_t: int = None
+    ) -> jnp.array:
         if self._is_leaf(sub_form):
             return self._tensor_max(
-                sub_form.eval_whole_path(path[:, start_t:end_t]), dim=-1
+                sub_form.eval_whole_path(path[:, start_t:end_t]), axis=-1
             )
 
         # unroll eventually
-        val_per_time = torch.stack(
+        val_per_time = jnp.stack(
             [
                 self._eval(sub_form, path, start_t=start_t + t, end_t=end_t)
                 for t in range(end_t - start_t)
             ],
-            dim=-1,
+            axis=-1,
         )
 
-        return self._tensor_max(val_per_time, dim=-1)
+        return self._tensor_max(val_per_time, axis=-1)
 
     def _eval_until(
             self,
             sub_form1: AST,
             sub_form2: AST,
-            path: Tensor,
+            path: jnp.array,
             start_t: int = 0,
             end_t: int = None,
-    ) -> Tensor:
+    ) -> jnp.array:
         if self._is_leaf(sub_form2):
             till_pred = sub_form2.eval_whole_path(path[:, start_t:end_t])
         else:
-            till_pred = torch.stack(
+            till_pred = jnp.stack(
                 [
                     self._eval(sub_form2, path, start_t=t, end_t=end_t)
                     for t in range(end_t - start_t)
                 ],
-                dim=-1,
+                axis=-1,
             )
         # mask condition, once condition > 0 (after until True),
         # the right sequence is no longer considered
         cond = (till_pred > 0).int()
-        index = torch.argmax(cond, dim=-1)
+        index = jnp.argmax(cond, axis=-1)
         for i in range(cond.shape[0]):
             cond[i, index[i]:] = 1.0
         cond = ~cond.bool()
-        till_pred = torch.where(cond, till_pred, default_tensor(1))
+        till_pred = jnp.where(cond, till_pred, default_tensor(1))
 
         if self._is_leaf(sub_form1):
             res = sub_form1.eval_whole_path(path[:, start_t:end_t])
         else:
-            res = torch.stack(
+            res = jnp.stack(
                 [
                     self._eval(sub_form1, path, start_t=t, end_t=end_t)
                     for t in range(end_t - start_t)
                 ],
-                dim=-1,
+                axis=-1,
             )
-        res = torch.where(cond, res, default_tensor(-1))
+        res = jnp.where(cond, res, default_tensor(-1))
 
         # when cond < 0, res should always > 0 to be hold
-        return self._tensor_min(-res * till_pred, dim=-1)
+        return self._tensor_min(-res * till_pred, axis=-1)
 
     def get_stlpy_form(self):
         # catch already converted form
@@ -872,13 +529,13 @@ class STL:
     def _is_leaf(ast: AST):
         return issubclass(type(ast), PredicateBase)
 
-    def _tensor_min(self, tensor: Tensor, dim=-1) -> Tensor:
-        ratio = softmax(tensor * -HARDNESS, dim=dim)
-        return torch.sum(tensor * ratio, dim=dim)
+    def _tensor_min(self, tensor: jnp.array, axis=-1) -> jnp.array:
+        ratio = softmax(tensor * -HARDNESS, axis=axis)
+        return jnp.sum(tensor * ratio, axis=axis)
 
-    def _tensor_max(self, tensor: Tensor, dim=-1) -> Tensor:
-        ratio = softmax(tensor * HARDNESS, dim=dim)
-        return torch.sum(tensor * ratio, dim=dim)
+    def _tensor_max(self, tensor: jnp.array, axis=-1) -> jnp.array:
+        ratio = softmax(tensor * HARDNESS, axis=axis)
+        return jnp.sum(tensor * ratio, axis=axis)
 
     def simplify(self):
         if self.stlpy_form is None:

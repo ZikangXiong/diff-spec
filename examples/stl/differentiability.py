@@ -1,14 +1,25 @@
 # %%
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
-from torch.optim import Adam
+import optax
 
-from ds.stl import STL, RectAvoidPredicte, RectReachPredicate
-from ds.utils import default_tensor
+# if JAX_BACKEND is set the import will be from jax.numpy
+if os.environ.get("JAX_STL_BACKEND") == "jax":
+    print("Using JAX backend")
+    from ds.stl_jax import STL, RectAvoidPredicate, RectReachPredicate
+    from ds.utils import default_tensor
+    import jax
+else:
+    print("Using PyTorch backend")
+    from ds.stl import STL, RectAvoidPredicate, RectReachPredicate
+    from ds.utils import default_tensor
+    import torch
+    from torch.optim import Adam
 
 
-def eval_reach_avoid():
+def eval_reach_avoid(mute=False):
     """
     The evaluation of a formula
     """
@@ -17,7 +28,7 @@ def eval_reach_avoid():
     # goal is a rectangle area centered in [0, 0] with width and height 1
     goal = STL(RectReachPredicate(np.array([0, 0]), np.array([1, 1]), "goal"))
     # obs is a rectangle area centered in [3, 2] with width and height 1
-    obs = STL(RectAvoidPredicte(np.array([3, 2]), np.array([1, 1]), "obs"))
+    obs = STL(RectAvoidPredicate(np.array([3, 2]), np.array([1, 1]), "obs"))
     # form is the formula goal eventually in 0 to 10 and avoid obs always in 0 to 10
     form = goal.eventually(0, 10) & obs.always(0, 10)
 
@@ -60,15 +71,19 @@ def eval_reach_avoid():
     )
 
     # eval the formula, default at time 0
-    res = form.eval(path=path_1)
-    print("eval result at time 0: ", res)
+    res1 = form.eval(path=path_1)
+    if not mute:
+        print("eval result at time 0: ", res1)
 
     # eval the formula at time 2
-    res = form.eval(path=path_1, t=2)
-    print("eval result at time 2: ", res)
+    res2 = form.eval(path=path_1, t=2)
+    if not mute:
+        print("eval result at time 2: ", res2)
+
+    return res1, res2
 
 
-def backward():
+def backward(mute=True):
     """
     Planning with gradient descent
     """
@@ -105,22 +120,50 @@ def backward():
             ]
         )
     )
+    loss = None
+    lr = 0.1
+    num_iterations = 1000
 
-    path.requires_grad = True
+    if os.environ.get("JAX_STL_BACKEND") == "jax":
 
-    opt = Adam(params=[path], lr=0.1)
+        solver = optax.adam(lr)
+        var_solver_state = solver.init(path)
 
-    for _ in range(100):
-        loss = -torch.mean(form.eval(path))
-        opt.zero_grad()
-        loss.backward()
-        opt.step()
+        @jax.jit
+        def train_step(params, solver_state):
+            # Performs a one step update.
+            (loss), grad = jax.value_and_grad(form.eval)(
+                params
+            )
+            updates, solver_state = solver.update(-grad, solver_state)
+            params = optax.apply_updates(params, updates)
+            return params, solver_state, loss
 
-    print(f"final loss: {loss.item()}")
-    print(path)
+        for _ in range(num_iterations):
+            path, var_solver_state, train_loss = train_step(
+                path, var_solver_state
+            )
 
-    plt.plot(path[0, :, 0].numpy(force=True), path[0, :, 1].numpy(force=True))
-    plt.show()
+        loss = form.eval(path)
+    else:
+        # PyTorch backend (slower when num_iterations is high)
+        path.requires_grad = True
+        opt = Adam(params=[path], lr=lr)
+
+        for _ in range(num_iterations):
+            loss = -torch.mean(form.eval(path))
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+        if not mute:
+            print(f"final loss: {loss.item()}")
+            print(path)
+
+            plt.plot(path[0, :, 0].numpy(force=True), path[0, :, 1].numpy(force=True))
+            plt.show()
+
+    return path, loss
 
 
 if __name__ == "__main__":
