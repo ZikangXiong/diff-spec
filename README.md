@@ -96,7 +96,7 @@ If you find this repository useful in your research, considering to cite:
 @misc{xiong2023diffspec,
       title={DiffSpec: A Differentiable Logic Specification Framework},
       url={https://github.com/ZikangXiong/diff-spec/},
-      author={Zikang Xiong},
+      author={Zikang Xiong, Joe Eappen},
       year={2023},
 }
 ```
