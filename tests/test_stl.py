@@ -1,6 +1,6 @@
 import unittest
 
-from examples.stl.differentiability import eval_reach_avoid, backward
+from examples.stl.differentiability import backward, eval_reach_avoid
 
 
 class TestExamples(unittest.TestCase):
@@ -23,5 +23,5 @@ class TestExamples(unittest.TestCase):
         # self.assertEqual(True, False)  # add assertion here
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

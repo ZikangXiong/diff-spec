@@ -2,8 +2,9 @@ import os
 import unittest
 
 os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
-from examples.stl.differentiability import eval_reach_avoid, backward
 from jax import jit
+
+from examples.stl.differentiability import backward, eval_reach_avoid
 
 
 class TestJAXExamples(unittest.TestCase):
@@ -30,5 +31,5 @@ class TestJAXExamples(unittest.TestCase):
         # self.assertEqual(True, False)  # add assertion here
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

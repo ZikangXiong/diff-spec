@@ -8,15 +8,17 @@ import optax
 # if JAX_BACKEND is set the import will be from jax.numpy
 if os.environ.get("JAX_STL_BACKEND") == "jax":
     print("Using JAX backend")
+    import jax
+
     from ds.stl_jax import STL, RectAvoidPredicate, RectReachPredicate
     from ds.utils import default_tensor
-    import jax
 else:
     print("Using PyTorch backend")
-    from ds.stl import STL, RectAvoidPredicate, RectReachPredicate
-    from ds.utils import default_tensor
     import torch
     from torch.optim import Adam
+
+    from ds.stl import STL, RectAvoidPredicate, RectReachPredicate
+    from ds.utils import default_tensor
 
 
 def eval_reach_avoid(mute=False):
@@ -132,17 +134,13 @@ def backward(mute=True):
         @jax.jit
         def train_step(params, solver_state):
             # Performs a one step update.
-            (loss), grad = jax.value_and_grad(form.eval)(
-                params
-            )
+            (loss), grad = jax.value_and_grad(form.eval)(params)
             updates, solver_state = solver.update(-grad, solver_state)
             params = optax.apply_updates(params, updates)
             return params, solver_state, loss
 
         for _ in range(num_iterations):
-            path, var_solver_state, train_loss = train_step(
-                path, var_solver_state
-            )
+            path, var_solver_state, train_loss = train_step(path, var_solver_state)
 
         loss = form.eval(path)
     else:

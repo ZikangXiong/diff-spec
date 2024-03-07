@@ -14,13 +14,14 @@ if os.environ.get("JAX_STL_BACKEND") == "jax":
     DEFAULT_DEVICE = jax.devices()[0]
     DEFAULT_DATATYPE = jnp.float32
 
-
     def default_tensor(x: np.ndarray, device: str = None, dtype=None) -> jnp.array:
-        return jax.device_put(jnp.asarray(
-            x,
-            dtype=DEFAULT_DATATYPE if dtype is None else dtype,
-        ), DEFAULT_DEVICE if device is None else device)
-
+        return jax.device_put(
+            jnp.asarray(
+                x,
+                dtype=DEFAULT_DATATYPE if dtype is None else dtype,
+            ),
+            DEFAULT_DEVICE if device is None else device,
+        )
 
 else:
     # print("Using PyTorch backend")
@@ -29,7 +30,6 @@ else:
 
     DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     DEFAULT_DATATYPE = torch.float32
-
 
     def default_tensor(x: np.ndarray, device: str = None, dtype=None) -> torch.Tensor:
         return torch.tensor(
