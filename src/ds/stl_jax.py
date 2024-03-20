@@ -1,3 +1,4 @@
+import importlib
 import io
 import os
 from abc import abstractmethod
@@ -7,11 +8,13 @@ from typing import TypeVar
 
 import jax
 import numpy as np
+import importlib
 from jax.nn import softmax
 from stlpy.STL import LinearPredicate, STLTree
 
-os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
-from ds.utils import default_tensor
+os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
+import ds.utils as ds_utils
+importlib.reload(ds_utils)  # Reload the module to change the backend
 
 with redirect_stdout(io.StringIO()):
     pass
@@ -27,6 +30,7 @@ import jax.numpy as jnp
 class PredicateBase:
     def __init__(self, name: str):
         self.name = name
+        self.logger = logging.getLogger(__name__)
 
     def eval_at_t(self, path: jnp.ndarray, t: int = 0) -> jnp.ndarray:
         return self.eval_whole_path(path, t, t + 1)[:, 0]
@@ -60,10 +64,10 @@ class RectReachPredicate(PredicateBase):
         self.cent = cent
         self.size = size
 
-        self.cent_tensor = default_tensor(cent)
-        self.size_tensor = default_tensor(size)
+        self.cent_tensor = ds_utils.default_tensor(cent)
+        self.size_tensor = ds_utils.default_tensor(size)
         self.shrink_factor = shrink_factor  # shrink the rectangle to make it more conservative
-        print(f"shrink factor: {shrink_factor}")
+        self.logger.info(f"shrink factor: {shrink_factor}")
 
     def eval_whole_path(
             self, path: jnp.array, start_t: int = 0, end_t: int = None
@@ -98,8 +102,8 @@ class RectAvoidPredicate(PredicateBase):
         self.cent = cent
         self.size = size
 
-        self.cent_tensor = default_tensor(cent)
-        self.size_tensor = default_tensor(size)
+        self.cent_tensor = ds_utils.default_tensor(cent)
+        self.size_tensor = ds_utils.default_tensor(size)
 
     def eval_whole_path(
             self, path: jnp.array, start_t: int = 0, end_t: int = None
@@ -444,7 +448,7 @@ class STL:
         for i in range(cond.shape[0]):
             cond[i, index[i]:] = 1.0
         cond = ~cond.bool()
-        till_pred = jnp.where(cond, till_pred, default_tensor(1))
+        till_pred = jnp.where(cond, till_pred, ds_utils.default_tensor(1))
 
         if self._is_leaf(sub_form1):
             res = sub_form1.eval_whole_path(path[:, start_t:end_t])
@@ -456,7 +460,7 @@ class STL:
                 ],
                 axis=-1,
             )
-        res = jnp.where(cond, res, default_tensor(-1))
+        res = jnp.where(cond, res, ds_utils.default_tensor(-1))
 
         # when cond < 0, res should always > 0 to be hold
         return self._tensor_min(-res * till_pred, axis=-1)

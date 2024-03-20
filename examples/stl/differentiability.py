@@ -4,17 +4,20 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import optax
+import importlib
+
+import ds.utils as ds_utils
 
 # if JAX_BACKEND is set the import will be from jax.numpy
-if os.environ.get("JAX_STL_BACKEND") == "jax":
+if os.environ.get("DIFF_STL_BACKEND") == "jax":
     print("Using JAX backend")
     from ds.stl_jax import STL, RectAvoidPredicate, RectReachPredicate
-    from ds.utils import default_tensor
+    importlib.reload(ds_utils)  # Reload the module to reset the backend
     import jax
 else:
     print("Using PyTorch backend")
     from ds.stl import STL, RectAvoidPredicate, RectReachPredicate
-    from ds.utils import default_tensor
+    importlib.reload(ds_utils)  # Reload the module to reset the backend
     import torch
     from torch.optim import Adam
 
@@ -33,7 +36,7 @@ def eval_reach_avoid(mute=False):
     form = goal.eventually(0, 10) & obs.always(0, 10)
 
     # Define 2 initial paths in batch
-    path_1 = default_tensor(
+    path_1 = ds_utils.default_tensor(
         np.array(
             [
                 [
@@ -98,7 +101,7 @@ def backward(mute=True):
     # and that holds always in 0 to 8
     # In other words, the path will repeatedly visit goal_1 and goal_2 in 0 to 13
     form = (goal_1.eventually(0, 5) & goal_2.eventually(0, 5)).always(0, 8)
-    path = default_tensor(
+    path = ds_utils.default_tensor(
         np.array(
             [
                 [
@@ -124,7 +127,7 @@ def backward(mute=True):
     lr = 0.1
     num_iterations = 1000
 
-    if os.environ.get("JAX_STL_BACKEND") == "jax":
+    if os.environ.get("DIFF_STL_BACKEND") == "jax":
 
         solver = optax.adam(lr)
         var_solver_state = solver.init(path)

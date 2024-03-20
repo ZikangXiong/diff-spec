@@ -369,6 +369,7 @@ class StlpySolver:
 class PredicateBase:
     def __init__(self, name: str):
         self.name = name
+        self.logger = logging.getLogger(__name__)
 
     def eval_at_t(self, path: Tensor, t: int = 0) -> Tensor:
         return self.eval_whole_path(path, t, t + 1)[:, 0]
@@ -404,8 +405,8 @@ class RectReachPredicate(PredicateBase):
 
         self.cent_tensor = default_tensor(cent)
         self.size_tensor = default_tensor(size)
-        self.shrink_factor = shrink_factor  # shrink the rectangle to make it more conservative
-        print(f"shrink factor: {shrink_factor}")
+        self.shrink_factor = shrink_factor  # shrink the rectangle to make it more conservative in STLpy
+        self.logger.info(f"shrink factor: {shrink_factor}")
 
     def eval_whole_path(
             self, path: Tensor, start_t: int = 0, end_t: int = None

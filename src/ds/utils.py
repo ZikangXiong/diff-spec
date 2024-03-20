@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 # if JAX_BACKEND is set the import will be from jax.numpy
-if os.environ.get("JAX_STL_BACKEND") == "jax":
+if os.environ.get("DIFF_STL_BACKEND") == "jax":
     # print("Using JAX backend")
 
     import jax

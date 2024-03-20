@@ -1,12 +1,17 @@
+import importlib
 import os
 import unittest
 
-os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
-from examples.stl.differentiability import eval_reach_avoid, backward
 from jax import jit
+
+import examples.stl.differentiability as stl_diff_examples
 
 
 class TestJAXExamples(unittest.TestCase):
+
+    def setUp(self):
+        os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
+        importlib.reload(stl_diff_examples)  # Reload the module to reset the backend
 
     def test_run(self):
         # TODO: Study jit decorator and see optimizations
@@ -15,13 +20,13 @@ class TestJAXExamples(unittest.TestCase):
         final_result = []
         for _ in range(1000):
             # Magic of jax
-            res = jit(eval_reach_avoid)()
+            res = jit(stl_diff_examples.eval_reach_avoid)()
             final_result.append(res)
 
         print(final_result)
 
         # Test differentiability
-        path = backward()
+        path = stl_diff_examples.backward()
         print(path)
         # (jax.lax.fori_loop(0, 1000, lambda i, _: jit(eval_reach_avoid)(), None)).block_until_ready()
         # for _ in range(1000):
