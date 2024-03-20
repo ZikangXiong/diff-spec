@@ -48,7 +48,7 @@ class TestJAXExamples(unittest.TestCase):
         # form is the formula goal_1 eventually in 0 to 5 and goal_2 eventually in 0 to 5
         # and that holds always in 0 to 8
         # In other words, the path will repeatedly visit goal_1 and goal_2 in 0 to 13
-        form = goal_1.eventually(0, 5)
+        form = (goal_1.eventually(0, 5) & goal_2.eventually(0, 5)).always(0, 8)
         path = ds_utils.default_tensor(
             np.array(
                 [
@@ -72,9 +72,7 @@ class TestJAXExamples(unittest.TestCase):
             )
         )
 
-        (loss), grad = jax.value_and_grad(form.eval)(
-            jax.numpy.tile(path, (100, 2, 1))
-        )
+        loss = form.eval(jax.numpy.tile(path, (num_tiles, 1, 1)))  # Make a batch of size num_tiles
         self.assertGreater(len(loss.shape), 0, f"Not returning correct shape")
         self.assertEqual(loss.shape[0], num_tiles, f"Not returning {num_tiles} values")
 

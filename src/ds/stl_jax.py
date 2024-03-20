@@ -76,7 +76,7 @@ class RectReachPredicate(PredicateBase):
         eval_path = path[:, start_t:end_t]
         res = jnp.min(
             self.size_tensor / 2 - jnp.abs(eval_path - self.cent_tensor), axis=-1
-        )[0]
+        )
 
         return res
 
@@ -112,7 +112,7 @@ class RectAvoidPredicate(PredicateBase):
         eval_path = path[:, start_t:end_t]
         res = jnp.max(
             jnp.abs(eval_path - self.cent_tensor) - self.size_tensor / 2, axis=-1
-        )[0]
+        )
 
         return res
 

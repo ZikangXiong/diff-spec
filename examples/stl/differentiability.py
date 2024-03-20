@@ -135,10 +135,10 @@ def backward(mute=True):
         @jax.jit
         def train_step(params, solver_state):
             # Performs a one step update.
-            (loss), grad = jax.value_and_grad(form.eval)(
+            (loss), grad = jax.value_and_grad(lambda x : -form.eval(x).mean())(
                 params
             )
-            updates, solver_state = solver.update(-grad, solver_state)
+            updates, solver_state = solver.update(grad, solver_state)
             params = optax.apply_updates(params, updates)
             return params, solver_state, loss
 
