@@ -72,7 +72,7 @@ First set the backend to JAX:
 ```python
 import os
 
-os.environ["JAX_STL_BACKEND"] = "jax"  # set the backend to JAX
+os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX
 ```
 
 Then you can use the JAX backend to optimize the inputs to satisfy the formula.
