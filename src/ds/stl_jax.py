@@ -10,7 +10,7 @@ import jax
 import numpy as np
 import importlib
 from jax.nn import softmax
-from stlpy.STL import LinearPredicate, STLTree
+from stlpy.STL import LinearPredicate as baseLinearPredicate, STLTree
 
 os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
 import ds.utils as ds_utils
@@ -154,12 +154,12 @@ def inside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
     y1_min, y1_max, y2_min, y2_max = bounds
 
     # Create predicates a*y >= b for each side of the rectangle
-    a1 = np.zeros((1, d))
+    a1 = jnp.zeros((1, d))
     a1[:, y1_index] = 1
     right = LinearPredicate(a1, y1_min)
     left = LinearPredicate(-a1, -y1_max)
 
-    a2 = np.zeros((1, d))
+    a2 = jnp.zeros((1, d))
     a2[:, y2_index] = 1
     top = LinearPredicate(a2, y2_min)
     bottom = LinearPredicate(-a2, -y2_max)
@@ -206,12 +206,12 @@ def outside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
     y1_min, y1_max, y2_min, y2_max = bounds
 
     # Create predicates a*y >= b for each side of the rectangle
-    a1 = np.zeros((1, d))
+    a1 = jnp.zeros((1, d))
     a1[:, y1_index] = 1
     right = LinearPredicate(a1, y1_max)
     left = LinearPredicate(-a1, -y1_min)
 
-    a2 = np.zeros((1, d))
+    a2 = jnp.zeros((1, d))
     a2[:, y2_index] = 1
     top = LinearPredicate(a2, y2_max)
     bottom = LinearPredicate(-a2, -y2_min)
@@ -227,12 +227,47 @@ def outside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
     return outside_rectangle
 
 
+class LinearPredicate(baseLinearPredicate):
+    """
+    A linear STL predicate :math:`\pi` defined by
+
+    .. math::
+
+        a^Ty_t - b \geq 0
+
+    where :math:`y_t \in \mathbb{R}^d` is the value of the signal
+    at a given timestep :math:`t`, :math:`a \in \mathbb{R}^d`,
+    and :math:`b \in \mathbb{R}`.
+
+    :param a:       a jax numpy array or list representing the vector :math:`a`
+    :param b:       a list, jax numpy array, or scalar representing :math:`b`
+    :param name:    (optional) a string used to identify this predicate.
+    """
+
+    def __init__(self, a, b, name=None):
+        # Convert provided constraints to numpy arrays
+        self.a = jnp.asarray(a).reshape((-1, 1))
+        self.b = jnp.atleast_1d(b)
+
+        # Some dimension-related sanity checks
+        assert (self.a.shape[1] == 1), "a must be of shape (d,1)"
+        assert (self.b.shape == (1,)), "b must be of shape (1,)"
+
+        # Store the dimensionality of y_t
+        self.d = self.a.shape[0]
+
+        # A unique string describing this predicate
+        self.name = name
+
+
 AST = TypeVar("AST", list, PredicateBase)
 
 
 class STL:
     """
     Class for representing STL formulas.
+
+    All methods are functionally pure with no side effects during execution.
     """
 
     def __init__(self, ast: AST):
