@@ -67,12 +67,12 @@ Probability temporal logic is an ongoing work integrating probability and random
 
 If you are using JAX, you can use the JAX backend (stl_jax) and gain immense speedups in many cases.
 
-First set the backend to JAX:
+First set the backend to JAX using Environment Variables for our utility functions:
 
 ```python
 import os
 
-os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX
+os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX (if unset or any other value uses the PyTorch backend)
 ```
 
 Then you can use the JAX backend to optimize the inputs to satisfy the formula.
