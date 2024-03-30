@@ -6,6 +6,8 @@ import jax
 import numpy as np
 from jax import jit
 
+os.environ["DIFF_STL_BACKEND"] = "jax"  # So ds_utils does not require torch
+
 import ds.utils as ds_utils
 import examples.stl.differentiability as stl_diff_examples
 from ds.stl_jax import STL, RectReachPredicate

@@ -21,7 +21,8 @@ with redirect_stdout(io.StringIO()):
 
 import logging
 
-from .stl import colored, HARDNESS, IMPLIES_TRICK, set_hardness
+colored, HARDNESS, IMPLIES_TRICK, set_hardness = ds_utils.colored, ds_utils.HARDNESS, ds_utils.IMPLIES_TRICK, ds_utils.set_hardness
+
 
 # Replace with JAX
 import jax.numpy as jnp

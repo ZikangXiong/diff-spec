@@ -2,7 +2,6 @@ import io
 import time
 from abc import abstractmethod
 from collections import deque
-from contextlib import contextmanager
 from contextlib import redirect_stdout
 from typing import TypeVar, Tuple
 
@@ -15,40 +14,12 @@ from stlpy.systems import LinearSystem
 from torch import Tensor
 from torch.nn.functional import softmax
 
-from ds.utils import default_tensor
+from ds.utils import default_tensor, colored, HARDNESS, IMPLIES_TRICK, set_hardness
 
 with redirect_stdout(io.StringIO()):
     from stlpy.solvers.base import STLSolver
 
 import logging
-
-COLORED = False
-IMPLIES_TRICK = False
-HARDNESS = 100.0  # Reduce hardness of softmax to propagate gradients more easily
-
-
-@contextmanager
-def set_hardness(hardness: float):
-    """Set the hardness of the softmax function for the duration of the context.
-    Useful for making evaluation strict while allowing gradients to pass through during training.
-
-    :param hardness: hardness of the softmax function
-    :type hardness: float
-    """
-    global HARDNESS
-    old_hardness = HARDNESS
-    HARDNESS = hardness
-    yield
-    HARDNESS = old_hardness
-
-
-if COLORED:
-    from termcolor import colored
-else:
-
-    def colored(text, color):
-        return text
-
 
 class GurobiMICPSolver(STLSolver):
     """

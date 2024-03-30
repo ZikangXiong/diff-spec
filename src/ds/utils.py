@@ -1,6 +1,35 @@
 import os
 
+from contextlib import contextmanager
 import numpy as np
+
+
+COLORED = False
+IMPLIES_TRICK = False
+HARDNESS = 100.0  # Reduce hardness of softmax to propagate gradients more easily
+
+
+@contextmanager
+def set_hardness(hardness: float):
+    """Set the hardness of the softmax function for the duration of the context.
+    Useful for making evaluation strict while allowing gradients to pass through during training.
+
+    :param hardness: hardness of the softmax function
+    :type hardness: float
+    """
+    global HARDNESS
+    old_hardness = HARDNESS
+    HARDNESS = hardness
+    yield
+    HARDNESS = old_hardness
+
+
+if COLORED:
+    from termcolor import colored
+else:
+
+    def colored(text, color):
+        return text
 
 # if JAX_BACKEND is set the import will be from jax.numpy
 if os.environ.get("DIFF_STL_BACKEND") == "jax":
