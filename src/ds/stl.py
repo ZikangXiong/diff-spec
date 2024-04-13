@@ -1,25 +1,26 @@
+import gurobipy as gp
 import io
+import numpy as np
 import time
+import torch
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
-from typing import TypeVar, Tuple
-
-import gurobipy as gp
-import numpy as np
-import torch
 from gurobipy import GRB
 from stlpy.STL import LinearPredicate, NonlinearPredicate, STLTree
 from stlpy.systems import LinearSystem
 from torch import Tensor
 from torch.nn.functional import softmax
+from typing import TypeVar, Tuple
 
-from ds.utils import default_tensor, colored, HARDNESS, IMPLIES_TRICK, set_hardness
+from ds.utils import default_tensor, colored, HARDNESS, IMPLIES_TRICK, set_hardness, outside_rectangle_formula, \
+    inside_rectangle_formula
 
 with redirect_stdout(io.StringIO()):
     from stlpy.solvers.base import STLSolver
 
 import logging
+
 
 class GurobiMICPSolver(STLSolver):
     """
@@ -431,110 +432,6 @@ class RectAvoidPredicate(PredicateBase):
             [self.cent - self.size / 2, self.cent + self.size / 2]
         ).T.flatten()
         return outside_rectangle_formula(bounds, 0, 1, 2, self.name)
-
-
-def inside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
-    """
-    Create an STL formula representing being inside a
-    rectangle with the given bounds:
-
-    ::
-
-       y2_max   +-------------------+
-                |                   |
-                |                   |
-                |                   |
-       y2_min   +-------------------+
-                y1_min              y1_max
-
-    :param bounds:      Tuple ``(y1_min, y1_max, y2_min, y2_max)`` containing
-                        the bounds of the rectangle.
-    :param y1_index:    index of the first (``y1``) dimension
-    :param y2_index:    index of the second (``y2``) dimension
-    :param d:           dimension of the overall signal
-    :param name:        (optional) string describing this formula
-
-    :return inside_rectangle:   An ``STLFormula`` specifying being inside the
-                                rectangle at time zero.
-    """
-    assert y1_index < d, "index must be less than signal dimension"
-    assert y2_index < d, "index must be less than signal dimension"
-
-    # Unpack the bounds
-    y1_min, y1_max, y2_min, y2_max = bounds
-
-    # Create predicates a*y >= b for each side of the rectangle
-    a1 = np.zeros((1, d))
-    a1[:, y1_index] = 1
-    right = LinearPredicate(a1, y1_min)
-    left = LinearPredicate(-a1, -y1_max)
-
-    a2 = np.zeros((1, d))
-    a2[:, y2_index] = 1
-    top = LinearPredicate(a2, y2_min)
-    bottom = LinearPredicate(-a2, -y2_max)
-
-    # Take the conjuction across all the sides
-    inside_rectangle = right & left & top & bottom
-
-    # set the names
-    if name is not None:
-        inside_rectangle.__str__ = lambda: name
-        inside_rectangle.__repr__ = lambda: name
-
-    return inside_rectangle
-
-
-def outside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
-    """
-    Create an STL formula representing being outside a
-    rectangle with the given bounds:
-
-    ::
-
-       y2_max   +-------------------+
-                |                   |
-                |                   |
-                |                   |
-       y2_min   +-------------------+
-                y1_min              y1_max
-
-    :param bounds:      Tuple ``(y1_min, y1_max, y2_min, y2_max)`` containing
-                        the bounds of the rectangle.
-    :param y1_index:    index of the first (``y1``) dimension
-    :param y2_index:    index of the second (``y2``) dimension
-    :param d:           dimension of the overall signal
-    :param name:        (optional) string describing this formula
-
-    :return outside_rectangle:   An ``STLFormula`` specifying being outside the
-                                 rectangle at time zero.
-    """
-    assert y1_index < d, "index must be less than signal dimension"
-    assert y2_index < d, "index must be less than signal dimension"
-
-    # Unpack the bounds
-    y1_min, y1_max, y2_min, y2_max = bounds
-
-    # Create predicates a*y >= b for each side of the rectangle
-    a1 = np.zeros((1, d))
-    a1[:, y1_index] = 1
-    right = LinearPredicate(a1, y1_max)
-    left = LinearPredicate(-a1, -y1_min)
-
-    a2 = np.zeros((1, d))
-    a2[:, y2_index] = 1
-    top = LinearPredicate(a2, y2_max)
-    bottom = LinearPredicate(-a2, -y2_min)
-
-    # Take the disjuction across all the sides
-    outside_rectangle = right | left | top | bottom
-
-    # set the names
-    if name is not None:
-        outside_rectangle.__str__ = lambda: name
-        outside_rectangle.__repr__ = lambda: name
-
-    return outside_rectangle
 
 
 AST = TypeVar("AST", list, PredicateBase)

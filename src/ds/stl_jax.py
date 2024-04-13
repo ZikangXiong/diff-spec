@@ -1,19 +1,19 @@
 import importlib
+import importlib
 import io
+import jax
+import numpy as np
 import os
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
-from typing import TypeVar
-
-import jax
-import numpy as np
-import importlib
 from jax.nn import softmax
 from stlpy.STL import LinearPredicate as baseLinearPredicate, STLTree
+from typing import TypeVar
 
 os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
 import ds.utils as ds_utils
+
 importlib.reload(ds_utils)  # Reload the module to change the backend
 
 with redirect_stdout(io.StringIO()):
@@ -22,7 +22,8 @@ with redirect_stdout(io.StringIO()):
 import logging
 
 colored, HARDNESS, IMPLIES_TRICK, set_hardness = ds_utils.colored, ds_utils.HARDNESS, ds_utils.IMPLIES_TRICK, ds_utils.set_hardness
-
+outside_npy = ds_utils.outside_rectangle_formula
+inside_npy = ds_utils.inside_rectangle_formula
 
 # Replace with JAX
 import jax.numpy as jnp
@@ -85,7 +86,7 @@ class RectReachPredicate(PredicateBase):
         bounds = np.stack(
             [self.cent - self.size * self.shrink_factor / 2, self.cent + self.size * self.shrink_factor / 2]
         ).T.flatten()
-        return inside_rectangle_formula(bounds, 0, 1, 2, self.name)
+        return inside_npy(bounds, 0, 1, 2, self.name)
 
 
 class RectAvoidPredicate(PredicateBase):
@@ -121,7 +122,7 @@ class RectAvoidPredicate(PredicateBase):
         bounds = np.stack(
             [self.cent - self.size / 2, self.cent + self.size / 2]
         ).T.flatten()
-        return outside_rectangle_formula(bounds, 0, 1, 2, self.name)
+        return outside_npy(bounds, 0, 1, 2, self.name)
 
 
 def inside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
@@ -156,12 +157,12 @@ def inside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
 
     # Create predicates a*y >= b for each side of the rectangle
     a1 = jnp.zeros((1, d))
-    a1[:, y1_index] = 1
+    a1.at[:, y1_index].set(1)
     right = LinearPredicate(a1, y1_min)
     left = LinearPredicate(-a1, -y1_max)
 
     a2 = jnp.zeros((1, d))
-    a2[:, y2_index] = 1
+    a2.at[:, y2_index].set(1)
     top = LinearPredicate(a2, y2_min)
     bottom = LinearPredicate(-a2, -y2_max)
 
@@ -208,12 +209,12 @@ def outside_rectangle_formula(bounds, y1_index, y2_index, d, name=None):
 
     # Create predicates a*y >= b for each side of the rectangle
     a1 = jnp.zeros((1, d))
-    a1[:, y1_index] = 1
+    a1.at[:, y1_index].set(1)
     right = LinearPredicate(a1, y1_max)
     left = LinearPredicate(-a1, -y1_min)
 
     a2 = jnp.zeros((1, d))
-    a2[:, y2_index] = 1
+    a2.at[:, y2_index].set(1)
     top = LinearPredicate(a2, y2_max)
     bottom = LinearPredicate(-a2, -y2_min)
 
