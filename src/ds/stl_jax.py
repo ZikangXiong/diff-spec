@@ -41,10 +41,12 @@ class PredicateBase:
     def eval_whole_path(
             self, path: jnp.ndarray, start_t: int = 0, end_t: int = None
     ) -> jnp.ndarray:
+        """Stick to JAX when possible."""
         raise NotImplementedError
 
     @abstractmethod
     def get_stlpy_form(self) -> STLTree:
+        """Use Numpy to ensure compatibility with STLpy."""
         raise NotImplementedError
 
     def __str__(self) -> str:
@@ -74,6 +76,7 @@ class RectReachPredicate(PredicateBase):
     def eval_whole_path(
             self, path: jnp.array, start_t: int = 0, end_t: int = None
     ) -> jnp.array:
+        """Stick to JAX when possible."""
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
         res = jnp.min(
@@ -83,6 +86,7 @@ class RectReachPredicate(PredicateBase):
         return res
 
     def get_stlpy_form(self) -> STLTree:
+        """Use Numpy to ensure compatibility with STLpy."""
         bounds = np.stack(
             [self.cent - self.size * self.shrink_factor / 2, self.cent + self.size * self.shrink_factor / 2]
         ).T.flatten()
@@ -110,6 +114,7 @@ class RectAvoidPredicate(PredicateBase):
     def eval_whole_path(
             self, path: jnp.array, start_t: int = 0, end_t: int = None
     ) -> jnp.array:
+        """Stick to JAX when possible."""
         assert len(path.shape) == 3, "motion must be in batch"
         eval_path = path[:, start_t:end_t]
         res = jnp.max(
@@ -119,6 +124,7 @@ class RectAvoidPredicate(PredicateBase):
         return res
 
     def get_stlpy_form(self) -> STLTree:
+        """Use Numpy to ensure compatibility with STLpy."""
         bounds = np.stack(
             [self.cent - self.size / 2, self.cent + self.size / 2]
         ).T.flatten()
