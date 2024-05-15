@@ -1,15 +1,14 @@
 import importlib
-import importlib
 import io
-import jax
-import numpy as np
 import os
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
+from typing import TypeVar
+
+import numpy as np
 from jax.nn import softmax
 from stlpy.STL import LinearPredicate as baseLinearPredicate, STLTree
-from typing import TypeVar
 
 os.environ["DIFF_STL_BACKEND"] = "jax"  # set the backend to JAX for all child processes
 import ds.utils as ds_utils
@@ -335,6 +334,9 @@ class STL:
         """Get max time of the formula. Runs in O(n) time where n is the number of nodes. Runs once then memoizes."""
         if self._is_leaf(ast):
             return 1
+        if ast[0] == "G":
+            # Add end time from inner formula since always is unrolled
+            return ast[-1] + self._get_end_time(ast[1])
         if ast[0] in self.sequence_operators:
             # The last two elements are the start and end times
             return ast[-1]
