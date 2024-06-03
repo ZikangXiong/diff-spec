@@ -864,16 +864,16 @@ class STL:
 
     def _convert_eventually(self, ast):
         sub_form = self._to_stlpy(ast[1])
-        return sub_form.eventually(ast[2], ast[3])
+        return sub_form.eventually(ast[2], ast[3] - 1)
 
     def _convert_always(self, ast):
         sub_form = self._to_stlpy(ast[1])
-        return sub_form.always(ast[2], ast[3])
+        return sub_form.always(ast[2], ast[3] - 1)
 
     def _convert_until(self, ast):
         sub_form_1 = self._to_stlpy(ast[1])
         sub_form_2 = self._to_stlpy(ast[2])
-        return sub_form_1.until(sub_form_2, ast[3], ast[4])
+        return sub_form_1.until(sub_form_2, ast[3], ast[4] - 1)
 
     @staticmethod
     def _is_leaf(ast: AST):
