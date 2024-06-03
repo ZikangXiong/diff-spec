@@ -1,19 +1,20 @@
-import gurobipy as gp
 import io
-import numpy as np
 import time
-import torch
 from abc import abstractmethod
 from collections import deque
 from contextlib import redirect_stdout
+from typing import TypeVar, Tuple
+
+import gurobipy as gp
+import numpy as np
+import torch
 from gurobipy import GRB
 from stlpy.STL import LinearPredicate, NonlinearPredicate, STLTree
 from stlpy.systems import LinearSystem
 from torch import Tensor
 from torch.nn.functional import softmax
-from typing import TypeVar, Tuple
 
-from ds.utils import default_tensor, colored, HARDNESS, IMPLIES_TRICK, set_hardness, outside_rectangle_formula, \
+from ds.utils import default_tensor, colored, HARDNESS, IMPLIES_TRICK, outside_rectangle_formula, \
     inside_rectangle_formula
 
 with redirect_stdout(io.StringIO()):
@@ -726,16 +727,16 @@ class STL:
 
     def _convert_eventually(self, ast):
         sub_form = self._to_stlpy(ast[1])
-        return sub_form.eventually(ast[2], ast[3])
+        return sub_form.eventually(ast[2], ast[3] - 1)
 
     def _convert_always(self, ast):
         sub_form = self._to_stlpy(ast[1])
-        return sub_form.always(ast[2], ast[3])
+        return sub_form.always(ast[2], ast[3] - 1)
 
     def _convert_until(self, ast):
         sub_form_1 = self._to_stlpy(ast[1])
         sub_form_2 = self._to_stlpy(ast[2])
-        return sub_form_1.until(sub_form_2, ast[3], ast[4])
+        return sub_form_1.until(sub_form_2, ast[3], ast[4] - 1)
 
     @staticmethod
     def _is_leaf(ast: AST):

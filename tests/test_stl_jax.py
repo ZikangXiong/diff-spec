@@ -29,6 +29,8 @@ class TestJAXExamples(unittest.TestCase):
         # In other words, the path will repeatedly visit goal_1 and goal_2 in 0 to 13
         self.form = (self.goal_1.eventually(0, 5) & self.goal_2.eventually(0, 5)).always(0, 8)
         self.loop_form = (self.goal_1.eventually(0, 4) & self.goal_2.eventually(0, 4)).always(0, 8)
+        self.cover_form = self.goal_1.eventually(0, 12) & self.goal_2.eventually(0, 12)
+        self.seq_form = self.goal_1.eventually(0, 6) & self.goal_2.eventually(6, 12)
 
     def test_run(self):
         # TODO: Study jit decorator and see optimizations
@@ -103,15 +105,19 @@ class TestJAXExamples(unittest.TestCase):
         self.assertLess(loss[0], 0, f"Loss is not less than 0 for unsat path")
 
     def test_stlpy_solver(self):
+        """Test the stlpy solver with different forms of STL formulas"""
         x_0 = np.array([0, 0])
         solver = StlpySolver(space_dim=2)
-        total_time = 12 # For loop spec
-        stlpy_form = self.loop_form.get_stlpy_form()
-        path, info = solver.solve_stlpy_formula(stlpy_form, x0=x_0, total_time=total_time)
+        total_time = 12 # Common total time for all formulas
 
-        num_tiles = 4
-        loss = self.loop_form.eval(jax.numpy.tile(path, (num_tiles, 1, 1)))  # Make a batch of size num_tiles
-        self.assertGreater(loss[0], 0, f"STLPY solved path loss is not greater than 0")
+        for form in [self.loop_form, self.cover_form, self.seq_form]:
+
+            stlpy_form = form.get_stlpy_form()
+            path, info = solver.solve_stlpy_formula(stlpy_form, x0=x_0, total_time=total_time)
+
+            num_tiles = 4
+            loss = form.eval(jax.numpy.tile(path, (num_tiles, 1, 1)))  # Make a batch of size num_tiles
+            self.assertGreater(loss[0], 0, f"STLPY solved path loss is not greater than 0 for {form}")
 
 if __name__ == '__main__':
     unittest.main()
