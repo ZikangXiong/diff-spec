@@ -26,7 +26,7 @@ inside_npy = ds_utils.inside_rectangle_formula
 
 # Replace with JAX
 import jax.numpy as jnp
-
+import re
 
 class PredicateBase:
     def __init__(self, name: str):
@@ -657,6 +657,25 @@ class STL:
 
         self.expr_repr = expr
         return expr
+
+    def latex_repr(self):
+        repr = self.__repr__()
+        def replace_special_chars(match):
+            return {
+                "~": r"\neg",
+                "&": r"\land",
+                "|": r"\lor",
+                "->": r"\rightarrow",
+                "G": r"\Box",
+                "F": r"\Diamond",
+                "U": r"U",
+            }[match.group(0)]
+        replaced_symb = re.sub(r"~|&|\||->|G|F|U", replace_special_chars, repr)
+        # replace any [a, b] with _{[a,b]}
+        replaced_symb = re.sub(r"\[(\d+), (\d+)\]", r"_{[\1,\2]}", replaced_symb)
+        # replace goal_0, goal_1, ... with A, B, C, ...
+        replaced_symb = re.sub(r"goal_(\d+)", lambda x: chr(ord('A') + int(x.group(1))), replaced_symb)
+        return replaced_symb
 
     def get_all_predicates(self):
         all_preds = []
